@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style type="text/css">
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #tables {
+            margin: 20px auto;
+            border-radius: 10px;
+            overflow: hidden;
+            padding: 10px;
+            -webkit-user-select: none;
+        }
+
+        #tables tr th, #tables tr td {
+            width: 100px;
+            height: 30px;
+            text-align: center;
+            line-height: 30px;
+        }
+
+        #tables tr th.cursor {
+            cursor: pointer;
+        }
+
+        #tables thead {
+            background-color: #84ffe2;
+        }
+
+        .bg0 {
+            background-color: #faabcd;
+        }
+
+        .bg1 {
+            background-color: #fad59f;
+        }
+
+        #tables tbody tr:hover {
+            background-color: #fa4339;
+            font-size: 22px;
+            color: #fff;
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+<table id="tables" border="1" cellspacing="0">
+    <thead>
+    <tr>
+        <th class="cursor">name</th>
+        <th class="cursor">age</th>
+        <th >sex</th>
+        <th class="cursor">score</th>
+    </tr>
+    </thead>
+
+    <tbody></tbody>
+</table>
+
+
+<script type="text/javascript">
+    // 获取操作元素
+    var tables = document.getElementById('tables');
+    var tBody = tables.tBodies[0]; // 获取表格中第一个tbody
+    var tBodyRows = tBody.rows; // 获取tbody里所有tr
+
+    var tHead = tables.tHead; // 获取表头
+    var tHeadRow = tHead.rows[0]; // 获取表头里的第一个tr
+    var tHeadThs = tHeadRow.cells; // 获取表头里的所有th
+    tHeadThs[0].cn = 'pin'; // 要把所点击的th cn属性保存值 作为tr获取html属性的属性名
+    tHeadThs[2].cn = 'sex';
+
+    // 1.获取初始数据
+    function getData() {
+        // 1.创建ajax对象
+        var xhr = new XMLHttpRequest();
+        // 2.打开一个接口链接
+        xhr.open('get', './users.json');
+//        xhr.responseType = 'json'; // 指定返回的数据类型 json就会按json对象进行处理  必须要通过 this.response 才能得到数据
+        // 3.监听请求响应
+        xhr.onreadystatechange = function () {
+            if (this.readyState === 4 && this.status === 200) {
+                var data = this.responseText;
+//                console.log(this.response); // 配合 responseType来使用、
+                // 将数据转化为json对象
+                data = 'JSON' in window ? JSON.parse(data) : eval('(' + data + ')');
+                // 开始绑定数据
+                data.length ? bindData(data) : null; // 确保返回的不是空数据
+            }
+        };
+        // 4.发送请求
+        xhr.send();
+    }
+    // 请求数据
+    getData();
+
+    // 2.绑定数据
+    function bindData(data) {
+        var str = '';
+        for (var i = 0; i < data.length; i++) { // 数组中有多少个对象数据 就拼接多少个tr
+            var cur = data[i];
+            str += '<tr pin=' + cur.pin + ' sex='+cur.sex+'>'; // 将属于每个tr的pin字段拼接到tr的html属性上
+
+            delete cur['pin']; // pin字段只作为排序来使用 不用来展示
+            cur.sex = cur.sex ? '男' : '女'; // 处理男女
+
+            for (var k in cur) { // 对象中有多少个 属性（不包括pin这个属性）就拼接多少个td
+                str += '<td>' + cur[k] + '</td>'
+            }
+            str += '</tr>';
+        }
+        tBody.innerHTML = str;
+        changBg(); // 隔行变色
+        bindEvent(); // 执行事件绑定
+    }
+
+    // 3.绑定事件
+    function bindEvent() {
+        // 将类数组（tr集合） 转化为 数组
+        var arrRows = [].slice.call(tBodyRows, 0);
+        // 给每个th绑定点击事件
+        for(var i = 0; i < tHeadThs.length; i++){
+            var btn = tHeadThs[i];
+            if(btn.className !== 'cursor') continue;
+            btn.n = i;
+            btn.flag = -1; // 每一列升降序标识
+            btn.onclick = function () {
+                var that = this;
+                for(var j = 0; j < tHeadThs.length; j++){
+                    if(tHeadThs[j] !== that){ // 只要不是当前点击的这一列 就让其他列flag标识为 初始值 -1
+                        tHeadThs[j].flag = -1;
+                    }
+                }
+                that.flag *= -1; // 每一次取反
+                arrRows.sort(function (a, b) {
+                    // a 和 b 代表的是当前的tr 和 下个tr
+                    // a.cells b.cells 没一个tr的所有td集合
+                    // 根据点击的th的索引 来找到 tr里对应那一列的td
+                    var p1 = a.cells[that.n].innerHTML;
+                    var p2 = b.cells[that.n].innerHTML;
+                    if(isNaN(p1)) { // 解决拼音和性别排序
+                        var p3 = a.getAttribute(that.cn).localeCompare(b.getAttribute(that.cn));
+                        return p3 * that.flag; // 升降序切换
+                    }
+                    return (p1 - p2) * that.flag; // 升降序切换
+                });
+
+
+                // 将排好序 展现在页面中
+                var frg = document.createDocumentFragment();
+                for(var k = 0; k < arrRows.length; k++){
+                    frg.appendChild(arrRows[k])
+                }
+                tBody.appendChild(frg);
+                changBg(); // 每次排序之后 重新计算一次隔行变色
+            }
+        }
+    }
+
+
+    // 4.隔行变色
+    function changBg() {
+        for(var i = 0; i < tBodyRows.length; i++){
+            tBodyRows[i].className = 'bg' + i%2;
+        }
+    }
+</script>
+</body>
+</html>
